@@ -1,6 +1,9 @@
-"""Retail Shelf Monitor — detects products on shelf photos with YOLO
-and flags empty shelf regions. Falls back to a mock detector if the
-YOLO model can't be loaded (e.g. no internet to download weights)."""
+"""Retail Shelf Monitor — detects products on shelf photos with YOLO,
+scores planogram compliance, flags replenishment gaps, and reconciles
+shelf depletion against POS sales.
+
+Falls back to a mock detector if the YOLO model can't be loaded
+(e.g. no internet to download weights)."""
 
 import io
 import random
@@ -25,8 +28,8 @@ def load_model():
         return None, "mock"
 
 
-def detect_yolo(model, image: Image.Image):
-    results = model.predict(np.array(image), verbose=False)
+def detect_yolo(model, image: Image.Image, conf=0.25):
+    results = model.predict(np.array(image), verbose=False, conf=conf)
     rows = []
     for r in results:
         names = r.names
@@ -46,7 +49,7 @@ def detect_mock(image: Image.Image):
     w, h = image.size
     labels = ["bottle", "box", "can", "jar", "carton"]
     rows = []
-    for i in range(rng.randint(5, 9)):
+    for i in range(rng.randint(12, 20)):
         bw, bh = rng.randint(w // 12, w // 6), rng.randint(h // 8, h // 4)
         x1 = rng.randint(0, max(1, w - bw))
         y1 = rng.randint(0, max(1, h - bh))
@@ -58,37 +61,97 @@ def detect_mock(image: Image.Image):
     return rows
 
 
-def find_empty_regions(image: Image.Image, detections, cols=4, rows=3):
-    """Split the shelf into a grid; cells with no detections are 'empty'."""
+def region_center(d):
+    """Center point of a detection box, used to assign it to one grid cell."""
+    return ((d["x1"] + d["x2"]) / 2, (d["y1"] + d["y2"]) / 2)
+
+
+def score_regions(image: Image.Image, detections, rows, cols, expected, threshold_pct):
+    """Assign each detection to a grid cell by its center, count per cell,
+    and compute a fill percentage vs. the expected count.
+
+    Returns (region_rows, compliance_score) where region_rows is a list of
+    dicts describing every cell, and compliance_score is the share of cells
+    at/above the fill threshold."""
     w, h = image.size
-    empty = []
+    counts = [[0] * cols for _ in range(rows)]
+    for d in detections:
+        cx, cy = region_center(d)
+        gx = min(cols - 1, int(cx / w * cols))
+        gy = min(rows - 1, int(cy / h * rows))
+        counts[gy][gx] += 1
+
+    region_rows = []
+    compliant_cells = 0
     for gy in range(rows):
         for gx in range(cols):
-            cx1, cy1 = gx * w // cols, gy * h // rows
-            cx2, cy2 = (gx + 1) * w // cols, (gy + 1) * h // rows
-            covered = any(
-                d["x1"] < cx2 and d["x2"] > cx1 and d["y1"] < cy2 and d["y2"] > cy1
-                for d in detections
-            )
-            if not covered:
-                empty.append((cx1, cy1, cx2, cy2))
-    return empty
+            detected = counts[gy][gx]
+            fill = (detected / expected * 100) if expected > 0 else 0
+            is_gap = fill < threshold_pct
+            if not is_gap:
+                compliant_cells += 1
+            region_rows.append({
+                "gy": gy, "gx": gx,
+                "Row": gy + 1,
+                "Region": f"R{gy + 1}C{gx + 1}",
+                "Detected": detected,
+                "Expected": expected,
+                "Fill %": round(fill, 0),
+                "is_gap": is_gap,
+                "box": (gx * w // cols, gy * h // rows,
+                        (gx + 1) * w // cols, (gy + 1) * h // rows),
+            })
+
+    total_cells = rows * cols
+    compliance = round(compliant_cells / total_cells * 100) if total_cells else 0
+    return region_rows, compliance
 
 
-def draw_overlay(image: Image.Image, detections, empty_regions):
+def draw_overlay(image: Image.Image, detections, region_rows, rows, cols):
+    """Green boxes on detected items; grid lines; red fill on gap regions."""
     img = image.convert("RGB").copy()
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+
+    # Shade gap regions red
+    for r in region_rows:
+        if r["is_gap"]:
+            odraw.rectangle(r["box"], fill=(239, 68, 68, 90))
+    img = Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+
     draw = ImageDraw.Draw(img)
+    w, h = img.size
+    # Grid lines
+    for gx in range(1, cols):
+        draw.line([(gx * w // cols, 0), (gx * w // cols, h)], fill="#94a3b8", width=1)
+    for gy in range(1, rows):
+        draw.line([(0, gy * h // rows), (w, gy * h // rows)], fill="#94a3b8", width=1)
+
+    # Detected items
     for d in detections:
         draw.rectangle([d["x1"], d["y1"], d["x2"], d["y2"]], outline="#22c55e", width=3)
         draw.text((d["x1"] + 4, d["y1"] + 4), f'{d["label"]} {d["confidence"]}', fill="#22c55e")
-    for (x1, y1, x2, y2) in empty_regions:
-        draw.rectangle([x1, y1, x2, y2], outline="#ef4444", width=3)
-        draw.text((x1 + 4, y1 + 4), "EMPTY", fill="#ef4444")
+
+    # Label gap regions
+    for r in region_rows:
+        if r["is_gap"]:
+            x1, y1, _, _ = r["box"]
+            draw.text((x1 + 4, y1 + 4), "GAP", fill="#ef4444")
     return img
 
 
+# ── Sidebar controls ────────────────────────────────────────────────
+st.sidebar.header("⚙️ Shelf settings")
+grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=3)
+grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=4)
+expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=6)
+threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
+confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.25, step=0.05)
+
+# ── Header ──────────────────────────────────────────────────────────
 st.title("🛒 Retail Shelf Monitor")
-st.write("Upload a shelf photo — products are boxed in green, empty shelf regions flagged in red.")
+st.write("Upload a shelf photo — the app detects products, scores planogram "
+         "compliance, and flags regions that need replenishment.")
 
 model, mode = load_model()
 if mode == "yolo":
@@ -100,22 +163,68 @@ else:
 uploaded = st.file_uploader("Shelf photo", type=["jpg", "jpeg", "png"])
 
 if uploaded:
-    image = Image.open(io.BytesIO(uploaded.read()))
-    detections = detect_yolo(model, image) if mode == "yolo" else detect_mock(image)
-    empty_regions = find_empty_regions(image, detections)
+    try:
+        image = Image.open(io.BytesIO(uploaded.read()))
+        image.verify()  # validate it's a real image
+        uploaded.seek(0)
+        image = Image.open(io.BytesIO(uploaded.read())).convert("RGB")
+    except Exception:
+        st.error("⚠️ That file doesn't look like a valid image. "
+                 "Please upload a JPG or PNG photo of a shelf.")
+        st.stop()
 
+    detections = (detect_yolo(model, image, conf=confidence)
+                  if mode == "yolo" else detect_mock(image))
+    region_rows, compliance = score_regions(
+        image, detections, grid_rows, grid_cols, expected_items, threshold)
+    gaps = [r for r in region_rows if r["is_gap"]]
+
+    # ── Images ──────────────────────────────────────────────────────
     col1, col2 = st.columns(2)
     col1.image(image, caption="Original", use_container_width=True)
-    col2.image(draw_overlay(image, detections, empty_regions),
-               caption="Detections + empty regions", use_container_width=True)
+    col2.image(draw_overlay(image, detections, region_rows, grid_rows, grid_cols),
+               caption="Detections + planogram grid (red = gap)", use_container_width=True)
 
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Products detected", len(detections))
-    m2.metric("Empty regions", len(empty_regions))
-    m3.metric("Mode", mode.upper())
+    # ── Top-line metrics ────────────────────────────────────────────
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("📊 Planogram Compliance", f"{compliance}%")
+    m2.metric("Products detected", len(detections))
+    m3.metric("Gap regions", len(gaps))
+    m4.metric("Mode", mode.upper())
 
+    # ── 2. Gap alert table ──────────────────────────────────────────
+    st.subheader("🚨 Replenishment gaps")
+    if gaps:
+        gap_df = pd.DataFrame([{
+            "Row": r["Row"],
+            "Region": r["Region"],
+            "Detected": r["Detected"],
+            "Expected": r["Expected"],
+            "Fill %": f'{int(r["Fill %"])}%',
+            "Action": "REPLENISH NOW",
+        } for r in gaps])
+        st.dataframe(gap_df, use_container_width=True, hide_index=True)
+    else:
+        st.success("✅ Shelf fully compliant — every region is stocked at or above target.")
+
+    # ── 3. Shelf-vs-POS reconciliation ──────────────────────────────
+    st.subheader("🔄 Shelf vs. POS reconciliation")
+    rc1, rc2 = st.columns(2)
+    shelf_removed = rc1.number_input("Items removed from shelf (camera, last hour)",
+                                     min_value=0, value=20)
+    pos_sold = rc2.number_input("Items sold at POS (last hour)",
+                                min_value=0, value=12)
+    diff = shelf_removed - pos_sold
+    if diff > 0:
+        st.warning(f"⚠️ **{diff} units** left the shelf but haven't hit POS — "
+                   "depletion is running ahead of recorded sales. "
+                   "Early replenishment triggered.")
+    else:
+        st.success("✅ Shelf and POS in sync.")
+
+    # ── Detection detail ────────────────────────────────────────────
     if detections:
-        st.subheader("Detections")
-        st.dataframe(pd.DataFrame(detections), use_container_width=True)
+        with st.expander("See raw detections"):
+            st.dataframe(pd.DataFrame(detections), use_container_width=True)
 else:
     st.info("👆 Upload a photo to start. Any shelf or pantry photo works.")
