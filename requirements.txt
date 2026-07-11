@@ -1,0 +1,5 @@
+streamlit==1.59.1
+ultralytics==8.4.92
+opencv-python-headless==4.10.0.84
+pillow==10.4.0
+pandas==2.2.3

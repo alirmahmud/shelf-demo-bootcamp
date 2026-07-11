@@ -1,0 +1,8 @@
+﻿# YOLO model weights (large binary, downloads at runtime)
+yolov8n.pt
+*.pt
+
+# Python
+__pycache__/
+*.pyc
+.env
