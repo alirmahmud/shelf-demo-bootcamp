@@ -11,21 +11,21 @@ import random
 import numpy as np
 import pandas as pd
 import streamlit as st
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
 
 st.set_page_config(page_title="Decathlon Shelf Intelligence", page_icon="🏅", layout="wide")
 
 
 @st.cache_resource
 def load_model():
-    """Try to load YOLOv8; return (model, mode)."""
+    """Try to load YOLOv8; return (model, mode, error_message)."""
     try:
         from ultralytics import YOLO
         model = YOLO("yolov8n.pt")  # downloads weights on first run
-        return model, "yolo"
+        return model, "yolo", ""
     except Exception as e:
-        st.session_state["model_error"] = str(e)
-        return None, "mock"
+        # Return the error (session_state would be lost across cached reruns).
+        return None, "mock", f"{type(e).__name__}: {e}"
 
 
 def detect_yolo(model, image: Image.Image, conf=0.25):
@@ -150,10 +150,10 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
 # ── Sidebar controls ────────────────────────────────────────────────
 st.sidebar.header("⚙️ Shelf settings")
 grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=1)
-grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
+grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=2)
 expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=2)
 threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
-confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
+confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.20, step=0.05)
 show_labels = st.sidebar.checkbox("Show detection labels", value=False,
                                   help="Raw model class names (COCO) — often "
                                        "wrong for retail products; off keeps "
@@ -162,7 +162,7 @@ show_labels = st.sidebar.checkbox("Show detection labels", value=False,
 st.sidebar.markdown("**Section names** (one per line, top-left to bottom-right)")
 section_text = st.sidebar.text_area(
     "Section names", label_visibility="collapsed",
-    value="Soft Rollers\nFirm Rollers\nMassage Kits")
+    value="Soft Rollers\nFirm Rollers")
 section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
 
 
@@ -178,12 +178,12 @@ st.title("🏅 Decathlon Shelf Intelligence")
 st.write("Real-time shelf monitoring for Decathlon stores — detect gaps, "
          "score compliance, restock before the sale is lost.")
 
-model, mode = load_model()
+model, mode, model_error = load_model()
 if mode == "yolo":
     st.success("Running in **YOLO mode** (real object detection).")
 else:
     st.warning("YOLO model could not be loaded — running in **MOCK mode** (simulated detections). "
-               f"Reason: {st.session_state.get('model_error', 'unknown')}")
+               f"Reason: {model_error or 'unknown'}")
 
 uploaded = st.file_uploader("Shelf photo", type=["jpg", "jpeg", "png"])
 
@@ -192,7 +192,11 @@ if uploaded:
         image = Image.open(io.BytesIO(uploaded.read()))
         image.verify()  # validate it's a real image
         uploaded.seek(0)
-        image = Image.open(io.BytesIO(uploaded.read())).convert("RGB")
+        image = Image.open(io.BytesIO(uploaded.read()))
+        # Normalize: apply EXIF rotation (phone photos) and cap resolution —
+        # detection behavior is calibrated at 1280px.
+        image = ImageOps.exif_transpose(image).convert("RGB")
+        image.thumbnail((1280, 1280))
     except Exception:
         st.error("⚠️ That file doesn't look like a valid image. "
                  "Please upload a JPG or PNG photo of a shelf.")

@@ -15,13 +15,13 @@ different settings — adjust live in the sidebar.
 
 | Image (`test_images/`) | Grid | Expected/region | Confidence | Result |
 |------------------------|------|-----------------|------------|--------|
-| **massage_before.jpg** (hero, default settings) | 1 × 3 | 2 | 0.15 | **100%**, no gaps |
-| **massage_after.jpg** (hero, default settings)  | 1 × 3 | 2 | 0.15 | **67%**, gap on left region ("Soft Rollers") |
+| **massage_before.jpg** (hero, default settings) | 1 × 2 | 2 | 0.20 | **100%**, no gaps |
+| **massage_after.jpg** (hero, default settings)  | 1 × 2 | 2 | 0.20 | **50%**, gap on left region ("Soft Rollers") |
 | bikes_row.jpg (backup) | 1 × 4 | 3 | 0.25 | ~75%, 1 gap on first section |
 | bottles_row_cc0.jpg (fallback) | 2 × 3 | 2 | 0.15 | ~83%, 1 gap on first section |
 
 Section names for each demo (sidebar text box, one per line):
-- Massage pair: `Soft Rollers / Firm Rollers / Massage Kits` (default)
+- Massage pair: `Soft Rollers / Firm Rollers` (default)
 - Bikes: `City Bikes / Mountain Bikes / Kids' Bikes / Road Bikes`
 - Bottles: `Hydration / Team Sports / Backpacks / Footwear / Fitness / Cycling`
 
@@ -30,7 +30,11 @@ Section names for each demo (sidebar text box, one per line):
 `massage_before.jpg` is the fully stocked shelf → 100% compliant.
 `massage_after.jpg` is the same shelf minutes later with two rollers removed
 from the top-left → detection count drops in that region and the app flags
-"Soft Rollers — REPLENISH NOW" at 67% compliance.
+"Soft Rollers — REPLENISH NOW" at 50% compliance.
+
+Uploads are normalized in-app (EXIF rotation + resize to 1280px), so the
+original phone photos and the committed copies produce identical results.
+This calibration was verified against both.
 
 ## Notes
 
