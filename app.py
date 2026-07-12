@@ -150,10 +150,10 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
 # ── Sidebar controls ────────────────────────────────────────────────
 st.sidebar.header("⚙️ Shelf settings")
 grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=1)
-grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=2)
+grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
 expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=2)
 threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
-confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.20, step=0.05)
+confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
 show_labels = st.sidebar.checkbox("Show detection labels", value=False,
                                   help="Raw model class names (COCO) — often "
                                        "wrong for retail products; off keeps "
@@ -162,7 +162,7 @@ show_labels = st.sidebar.checkbox("Show detection labels", value=False,
 st.sidebar.markdown("**Section names** (one per line, top-left to bottom-right)")
 section_text = st.sidebar.text_area(
     "Section names", label_visibility="collapsed",
-    value="Soft Rollers\nFirm Rollers")
+    value="Soft Rollers\nFirm Rollers\nMassage Kits")
 section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
 
 
