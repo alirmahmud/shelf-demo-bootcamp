@@ -148,10 +148,24 @@ expected_items = st.sidebar.number_input("Expected items per region", min_value=
 threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
 confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
 
+st.sidebar.markdown("**Section names** (one per line, top-left to bottom-right)")
+section_text = st.sidebar.text_area(
+    "Section names", label_visibility="collapsed",
+    value="Hydration\nTeam Sports\nBackpacks\nFootwear\nFitness\nCycling")
+section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
+
+
+def section_for(gy, gx):
+    """Name a grid cell using the sidebar list (row-major), cycling if short."""
+    if not section_names:
+        return ""
+    return section_names[(gy * grid_cols + gx) % len(section_names)]
+
+
 # ── Header ──────────────────────────────────────────────────────────
-st.title("🛒 Retail Shelf Monitor")
-st.write("Upload a shelf photo — the app detects products, scores planogram "
-         "compliance, and flags regions that need replenishment.")
+st.title("🏅 Decathlon Shelf Intelligence")
+st.write("Real-time shelf monitoring for Decathlon stores — detect gaps, "
+         "score compliance, restock before the sale is lost.")
 
 model, mode = load_model()
 if mode == "yolo":
@@ -196,7 +210,7 @@ if uploaded:
     st.subheader("🚨 Replenishment gaps")
     if gaps:
         gap_df = pd.DataFrame([{
-            "Row": r["Row"],
+            "Section": section_for(r["gy"], r["gx"]),
             "Region": r["Region"],
             "Detected": r["Detected"],
             "Expected": r["Expected"],
@@ -207,8 +221,8 @@ if uploaded:
     else:
         st.success("✅ Shelf fully compliant — every region is stocked at or above target.")
 
-    # ── 3. Shelf-vs-POS reconciliation ──────────────────────────────
-    st.subheader("🔄 Shelf vs. POS reconciliation")
+    # ── 3. Event-Day Monitor — Shelf vs. POS ────────────────────────
+    st.subheader("🔄 Event-Day Monitor — Shelf vs. POS")
     rc1, rc2 = st.columns(2)
     shelf_removed = rc1.number_input("Items removed from shelf (camera, last hour)",
                                      min_value=0, value=20)
@@ -217,7 +231,7 @@ if uploaded:
     diff = shelf_removed - pos_sold
     if diff > 0:
         st.warning(f"⚠️ **{diff} units** left the shelf but haven't hit POS — "
-                   "depletion is running ahead of recorded sales. "
+                   "during store events, shelves empty faster than sales data shows. "
                    "Early replenishment triggered.")
     else:
         st.success("✅ Shelf and POS in sync.")
@@ -227,4 +241,4 @@ if uploaded:
         with st.expander("See raw detections"):
             st.dataframe(pd.DataFrame(detections), use_container_width=True)
 else:
-    st.info("👆 Upload a photo to start. Any shelf or pantry photo works.")
+    st.info("👆 Upload a shelf photo to start — a bottle wall, ball bin, or backpack section works best.")
