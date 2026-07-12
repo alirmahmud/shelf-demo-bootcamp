@@ -147,22 +147,21 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
     return img
 
 
-# ── Sidebar controls ────────────────────────────────────────────────
-st.sidebar.header("⚙️ Shelf settings")
-grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=1)
-grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
-expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=2)
-threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
-confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
-show_labels = st.sidebar.checkbox("Show detection labels", value=False,
-                                  help="Raw model class names (COCO) — often "
-                                       "wrong for retail products; off keeps "
-                                       "the focus on detection boxes.")
-
-st.sidebar.markdown("**Section names** (one per line, top-left to bottom-right)")
-section_text = st.sidebar.text_area(
-    "Section names", label_visibility="collapsed",
-    value="Soft Rollers\nFirm Rollers\nMassage Kits")
+# ── Sidebar controls (collapsed — defaults are demo-calibrated) ────
+with st.sidebar.expander("⚙️ Advanced settings", expanded=False):
+    grid_rows = st.number_input("Grid rows", min_value=1, max_value=10, value=1)
+    grid_cols = st.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
+    expected_items = st.number_input("Expected items per region", min_value=1, max_value=100, value=2)
+    threshold = st.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
+    confidence = st.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
+    show_labels = st.checkbox("Show detection labels", value=False,
+                              help="Raw model class names (COCO) — often "
+                                   "wrong for retail products; off keeps "
+                                   "the focus on detection boxes.")
+    st.markdown("**Section names** (one per line, top-left to bottom-right)")
+    section_text = st.text_area(
+        "Section names", label_visibility="collapsed",
+        value="Soft Rollers\nFirm Rollers\nMassage Kits")
 section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
 
 
@@ -185,6 +184,8 @@ else:
     st.warning("YOLO model could not be loaded — running in **MOCK mode** (simulated detections). "
                f"Reason: {model_error or 'unknown'}")
 
+st.caption("Upload a shelf photo — or try the sample images in the repo's "
+           "`test_images/` folder (start with `massage_before.jpg`, then `massage_after.jpg`).")
 uploaded = st.file_uploader("Shelf photo", type=["jpg", "jpeg", "png"])
 
 if uploaded:
