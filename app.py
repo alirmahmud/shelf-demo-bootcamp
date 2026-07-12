@@ -241,9 +241,9 @@ if uploaded:
     st.subheader("🔄 Event-Day Monitor — Shelf vs. POS")
     rc1, rc2 = st.columns(2)
     shelf_removed = rc1.number_input("Items removed from shelf (camera, last hour)",
-                                     min_value=0, value=20)
+                                     min_value=0, value=5)
     pos_sold = rc2.number_input("Items sold at POS (last hour)",
-                                min_value=0, value=12)
+                                min_value=0, value=3)
     diff = shelf_removed - pos_sold
     if diff > 0:
         st.warning(f"⚠️ **{diff} units** left the shelf but haven't hit POS — "
