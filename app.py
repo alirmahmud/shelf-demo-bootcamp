@@ -112,8 +112,23 @@ def score_regions(image: Image.Image, detections, rows, cols, expected, threshol
     return region_rows, compliance
 
 
+def find_missing(baseline_dets, current_dets, match_radius=80):
+    """Baseline detections with no nearby match in the current photo —
+    i.e. items that have disappeared. Center-distance matching tolerates
+    the small camera shift between two handheld shots."""
+    def center(d):
+        return ((d["x1"] + d["x2"]) / 2, (d["y1"] + d["y2"]) / 2)
+    missing = []
+    for b in baseline_dets:
+        bx, by = center(b)
+        if all(((bx - cx) ** 2 + (by - cy) ** 2) ** 0.5 > match_radius
+               for cx, cy in map(center, current_dets)):
+            missing.append(b)
+    return missing
+
+
 def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
-                 show_labels=False):
+                 show_labels=False, missing=None):
     """Green boxes on detected items; grid lines; red fill on gap regions."""
     img = image.convert("RGB").copy()
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -144,6 +159,11 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
         if r["is_gap"]:
             x1, y1, _, _ = r["box"]
             draw.text((x1 + 4, y1 + 4), "GAP", fill="#ef4444")
+
+    # Items missing vs. the baseline photo — tight red boxes at their spots
+    for d in (missing or []):
+        draw.rectangle([d["x1"], d["y1"], d["x2"], d["y2"]], outline="#ef4444", width=4)
+        draw.text((d["x1"] + 4, d["y2"] - 16), "MISSING", fill="#ef4444")
     return img
 
 
@@ -187,17 +207,27 @@ else:
 st.caption("Upload a shelf photo — or try the sample images in the repo's "
            "`test_images/` folder (start with `massage_before.jpg`, then `massage_after.jpg`).")
 uploaded = st.file_uploader("Shelf photo", type=["jpg", "jpeg", "png"])
+with st.expander("🔍 Before/after comparison (optional)"):
+    st.caption("Also upload the fully-stocked *before* photo of the same shelf: "
+               "items that disappeared get a tight red MISSING box at their exact spot.")
+    baseline_file = st.file_uploader("Before photo (baseline)", type=["jpg", "jpeg", "png"],
+                                     key="baseline")
+
+
+def load_normalized(file):
+    """Validate + normalize an upload (EXIF rotation, 1280px cap)."""
+    img = Image.open(io.BytesIO(file.read()))
+    img.verify()
+    file.seek(0)
+    img = Image.open(io.BytesIO(file.read()))
+    img = ImageOps.exif_transpose(img).convert("RGB")
+    img.thumbnail((1280, 1280))
+    return img
+
 
 if uploaded:
     try:
-        image = Image.open(io.BytesIO(uploaded.read()))
-        image.verify()  # validate it's a real image
-        uploaded.seek(0)
-        image = Image.open(io.BytesIO(uploaded.read()))
-        # Normalize: apply EXIF rotation (phone photos) and cap resolution —
-        # detection behavior is calibrated at 1280px.
-        image = ImageOps.exif_transpose(image).convert("RGB")
-        image.thumbnail((1280, 1280))
+        image = load_normalized(uploaded)
     except Exception:
         st.error("⚠️ That file doesn't look like a valid image. "
                  "Please upload a JPG or PNG photo of a shelf.")
@@ -209,12 +239,34 @@ if uploaded:
         image, detections, grid_rows, grid_cols, expected_items, threshold)
     gaps = [r for r in region_rows if r["is_gap"]]
 
+    # ── Before/after diff (optional baseline) ───────────────────────
+    missing = []
+    if baseline_file is not None and mode == "yolo":
+        try:
+            baseline_img = load_normalized(baseline_file)
+            baseline_dets = detect_yolo(model, baseline_img, conf=confidence)
+            # Match against a LOW-confidence pass of the current photo so an
+            # item that is still present but detected weakly (lighting/angle
+            # shift between shots) is not falsely reported as missing.
+            current_lo = detect_yolo(model, image, conf=min(confidence, 0.10))
+            missing = find_missing(baseline_dets, current_lo)
+        except Exception:
+            st.error("⚠️ The baseline file doesn't look like a valid image — ignoring it.")
+
     # ── Images ──────────────────────────────────────────────────────
     col1, col2 = st.columns(2)
     col1.image(image, caption="Original", use_container_width=True)
     col2.image(draw_overlay(image, detections, region_rows, grid_rows, grid_cols,
-                            show_labels=show_labels),
+                            show_labels=show_labels, missing=missing),
                caption="Detections + planogram grid (red = gap)", use_container_width=True)
+
+    if missing:
+        secs = sorted({section_for(
+            min(grid_rows - 1, int((d["y1"] + d["y2"]) / 2 / image.size[1] * grid_rows)),
+            min(grid_cols - 1, int((d["x1"] + d["x2"]) / 2 / image.size[0] * grid_cols)))
+            for d in missing})
+        st.error(f"🔻 **{len(missing)} item(s) missing vs. the baseline photo** "
+                 f"in: {', '.join(s for s in secs if s)} — marked with red MISSING boxes.")
 
     # ── Top-line metrics ────────────────────────────────────────────
     m1, m2, m3, m4 = st.columns(4)
@@ -241,8 +293,11 @@ if uploaded:
     # ── 3. Event-Day Monitor — Shelf vs. POS ────────────────────────
     st.subheader("🔄 Event-Day Monitor — Shelf vs. POS")
     rc1, rc2 = st.columns(2)
+    # Defaults follow the shelf state: compliant shelf -> numbers in sync;
+    # gaps flagged -> camera saw more removals than POS recorded.
+    default_removed = 5 if gaps else 3
     shelf_removed = rc1.number_input("Items removed from shelf (camera, last hour)",
-                                     min_value=0, value=5)
+                                     min_value=0, value=default_removed)
     pos_sold = rc2.number_input("Items sold at POS (last hour)",
                                 min_value=0, value=3)
     diff = shelf_removed - pos_sold
