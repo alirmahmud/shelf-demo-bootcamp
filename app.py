@@ -30,11 +30,16 @@ def load_model():
 
 def detect_yolo(model, image: Image.Image, conf=0.25):
     results = model.predict(np.array(image), verbose=False, conf=conf)
+    w, h = image.size
     rows = []
     for r in results:
         names = r.names
         for box in r.boxes:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
+            # Ignore oversized boxes (e.g. the whole shelf frame misread as
+            # one object) — anything covering more than half the image.
+            if (x2 - x1) * (y2 - y1) > 0.5 * w * h:
+                continue
             rows.append({
                 "label": names[int(box.cls[0])],
                 "confidence": round(float(box.conf[0]), 2),
@@ -107,7 +112,8 @@ def score_regions(image: Image.Image, detections, rows, cols, expected, threshol
     return region_rows, compliance
 
 
-def draw_overlay(image: Image.Image, detections, region_rows, rows, cols):
+def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
+                 show_labels=False):
     """Green boxes on detected items; grid lines; red fill on gap regions."""
     img = image.convert("RGB").copy()
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -130,7 +136,8 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols):
     # Detected items
     for d in detections:
         draw.rectangle([d["x1"], d["y1"], d["x2"], d["y2"]], outline="#22c55e", width=3)
-        draw.text((d["x1"] + 4, d["y1"] + 4), f'{d["label"]} {d["confidence"]}', fill="#22c55e")
+        if show_labels:
+            draw.text((d["x1"] + 4, d["y1"] + 4), f'{d["label"]} {d["confidence"]}', fill="#22c55e")
 
     # Label gap regions
     for r in region_rows:
@@ -143,15 +150,19 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols):
 # ── Sidebar controls ────────────────────────────────────────────────
 st.sidebar.header("⚙️ Shelf settings")
 grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=1)
-grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=4)
-expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=3)
+grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
+expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=2)
 threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
-confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.25, step=0.05)
+confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
+show_labels = st.sidebar.checkbox("Show detection labels", value=False,
+                                  help="Raw model class names (COCO) — often "
+                                       "wrong for retail products; off keeps "
+                                       "the focus on detection boxes.")
 
 st.sidebar.markdown("**Section names** (one per line, top-left to bottom-right)")
 section_text = st.sidebar.text_area(
     "Section names", label_visibility="collapsed",
-    value="City Bikes\nMountain Bikes\nKids' Bikes\nRoad Bikes")
+    value="Soft Rollers\nFirm Rollers\nMassage Kits")
 section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
 
 
@@ -196,7 +207,8 @@ if uploaded:
     # ── Images ──────────────────────────────────────────────────────
     col1, col2 = st.columns(2)
     col1.image(image, caption="Original", use_container_width=True)
-    col2.image(draw_overlay(image, detections, region_rows, grid_rows, grid_cols),
+    col2.image(draw_overlay(image, detections, region_rows, grid_rows, grid_cols,
+                            show_labels=show_labels),
                caption="Detections + planogram grid (red = gap)", use_container_width=True)
 
     # ── Top-line metrics ────────────────────────────────────────────

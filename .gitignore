@@ -6,3 +6,7 @@ yolov8n.pt
 __pycache__/
 *.pyc
 .env
+
+# Original phone photos (only normalized copies are committed)
+Decathlon Images/
+test_images/decathlon_real/

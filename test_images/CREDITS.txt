@@ -9,7 +9,12 @@ CC BY 2.0:    https://creativecommons.org/licenses/by/2.0/
 CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
 
 --------------------------------------------------------------------
-bikes_row.jpg   ← current demo hero image
+massage_before.jpg / massage_after.jpg   ← current demo hero pair
+  Own photos taken by the repository owner at the Decathlon BGC branch
+  (July 2026). No third-party license applies. Normalized copies
+  (EXIF-rotated, resized to 1280px) of the originals.
+
+bikes_row.jpg   ← backup demo image
   Title:    "SZ Tour Wal-Mart interior Goods bicycles"
   Author:   Hwangxiheng
   License:  CC BY-SA 3.0
