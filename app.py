@@ -150,10 +150,10 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols,
 # ── Sidebar controls (collapsed — defaults are demo-calibrated) ────
 with st.sidebar.expander("⚙️ Advanced settings", expanded=False):
     grid_rows = st.number_input("Grid rows", min_value=1, max_value=10, value=1)
-    grid_cols = st.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
+    grid_cols = st.number_input("Regions per row (columns)", min_value=1, max_value=10, value=2)
     expected_items = st.number_input("Expected items per region", min_value=1, max_value=100, value=2)
     threshold = st.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
-    confidence = st.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
+    confidence = st.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.20, step=0.05)
     show_labels = st.checkbox("Show detection labels", value=False,
                               help="Raw model class names (COCO) — often "
                                    "wrong for retail products; off keeps "
@@ -161,7 +161,7 @@ with st.sidebar.expander("⚙️ Advanced settings", expanded=False):
     st.markdown("**Section names** (one per line, top-left to bottom-right)")
     section_text = st.text_area(
         "Section names", label_visibility="collapsed",
-        value="Soft Rollers\nFirm Rollers\nMassage Kits")
+        value="Soft Rollers\nFirm Rollers")
 section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
 
 
