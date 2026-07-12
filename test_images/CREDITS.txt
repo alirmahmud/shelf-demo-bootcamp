@@ -1,15 +1,24 @@
 Image credits — test_images/
 =============================
 
-These photos are used only as demo inputs for the Retail Shelf Monitor.
-Five are licensed CC BY 2.0 (free to use WITH attribution); one is CC0
-(public domain, no attribution required). Attributions below satisfy the
-CC BY requirement.
+These photos are used only as demo inputs for Decathlon Shelf Intelligence.
+Licenses vary per file (CC0, CC BY 2.0, CC BY-SA 3.0) — see each entry.
+Attributions below satisfy the CC BY / CC BY-SA requirements.
 
-CC BY 2.0 license text: https://creativecommons.org/licenses/by/2.0/
+CC BY 2.0:    https://creativecommons.org/licenses/by/2.0/
+CC BY-SA 3.0: https://creativecommons.org/licenses/by-sa/3.0/
 
 --------------------------------------------------------------------
-bottles_row_cc0.jpg
+bikes_row.jpg   ← current demo hero image
+  Title:    "SZ Tour Wal-Mart interior Goods bicycles"
+  Author:   Hwangxiheng
+  License:  CC BY-SA 3.0
+  Source:   https://commons.wikimedia.org/wiki/File:SZ_Tour_Wal-Mart_interior_Goods_bicycles.JPG
+  Modified: YES — cropped to the bicycle display row (bottom ~58% of the
+            original) for the demo. As a CC BY-SA derivative, this crop is
+            shared under the same CC BY-SA 3.0 license.
+
+bottles_row_cc0.jpg   ← fallback image (grocery-style bottle wall)
   Title:   "Water bottles"
   Author:  Thad Zajdowicz
   License: CC0 1.0 (Public Domain — no attribution required)

@@ -13,7 +13,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image, ImageDraw
 
-st.set_page_config(page_title="Shelf Monitor", page_icon="🛒", layout="wide")
+st.set_page_config(page_title="Decathlon Shelf Intelligence", page_icon="🏅", layout="wide")
 
 
 @st.cache_resource
@@ -142,16 +142,16 @@ def draw_overlay(image: Image.Image, detections, region_rows, rows, cols):
 
 # ── Sidebar controls ────────────────────────────────────────────────
 st.sidebar.header("⚙️ Shelf settings")
-grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=2)
-grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=3)
-expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=2)
+grid_rows = st.sidebar.number_input("Grid rows", min_value=1, max_value=10, value=1)
+grid_cols = st.sidebar.number_input("Regions per row (columns)", min_value=1, max_value=10, value=4)
+expected_items = st.sidebar.number_input("Expected items per region", min_value=1, max_value=100, value=3)
 threshold = st.sidebar.slider("Compliance threshold (fill %)", min_value=0, max_value=100, value=50)
-confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.15, step=0.05)
+confidence = st.sidebar.slider("Detection confidence", min_value=0.0, max_value=1.0, value=0.25, step=0.05)
 
 st.sidebar.markdown("**Section names** (one per line, top-left to bottom-right)")
 section_text = st.sidebar.text_area(
     "Section names", label_visibility="collapsed",
-    value="Hydration\nTeam Sports\nBackpacks\nFootwear\nFitness\nCycling")
+    value="City Bikes\nMountain Bikes\nKids' Bikes\nRoad Bikes")
 section_names = [s.strip() for s in section_text.splitlines() if s.strip()]
 
 
